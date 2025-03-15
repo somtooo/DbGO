@@ -17,6 +17,9 @@ const BTREE_MAX_VAL_SIZE = 3000
 func init() {
 	node1max := HEADER + 8 + 2 + 4 + BTREE_MAX_KEY_SIZE + BTREE_MAX_VAL_SIZE
 	assert(node1max <= BTREE_PAGE_SIZE)
+
+	// Suppress unused warnings
+	_ = BNode(nil).setPtr
 }
 
 const (
@@ -61,6 +64,6 @@ func (node BNode) setPtr(idx uint16, value uint64) {
 
 func assert(cond bool) {
 	if !cond {
-		panic("assertion failure")
+		panic("assertion failed")
 	}
 }
