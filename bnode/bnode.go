@@ -52,80 +52,42 @@ func (node BNode) setHeader(nodeType uint16, numKeys uint16) {
 
 // Given a key index get its corresponding pointer
 func (node BNode) getPtr(idx uint16) uint64 {
-	assert(idx < node.getNumOfKeys())
-	position := HEADER + idx*8
-	return binary.LittleEndian.Uint64(node[position:])
+	return 0
 }
 
 // Given a key index set its corresponding pointer
 func (node BNode) setPtr(idx uint16, value uint64) {
-	assert(idx < node.getNumOfKeys())
-	position := HEADER + idx*8
-	binary.LittleEndian.PutUint64(node[position:], value)
 }
 
 // Given an idx read the offsets array for the key
 func (node BNode) getOffset(idx uint16) uint16 {
-	assert(idx < node.getNumOfKeys())
-	if idx == 0 {
-		return 0
-	}
-	position := HEADER + 8*node.getNumOfKeys() + (idx-1)*2
-	return binary.LittleEndian.Uint16(node[position:])
+	return 0
 }
 
 // Now that you can read the offset for a kv pair now get the starting position of a kv pair using the getOffset()
 func (node BNode) getKvPos(idx uint16) uint16 {
-	assert(idx < node.getNumOfKeys())
-	position := HEADER + 8*node.getNumOfKeys() + 2*node.getNumOfKeys() + node.getOffset(idx)
-	return position
+	return 0
 }
 
 // Now get the actual key as a byte slice
 func (node BNode) getKey(idx uint16) []byte {
-	assert(idx < node.getNumOfKeys())
-	klen := binary.LittleEndian.Uint16(node[node.getKvPos(idx):])
-	position := node.getKvPos(idx) + 4
-	return node[position : klen+position]
+	return nil
 }
 
 // Now get the actual value as a byte slice
 func (node BNode) getVal(idx uint16) []byte {
-	klen := binary.LittleEndian.Uint16(node[node.getKvPos(idx):])
-	vlen := binary.LittleEndian.Uint16(node[node.getKvPos(idx)+2:])
-	position := node.getKvPos(idx) + 4
-	return node[position+klen : position+klen+vlen]
+	return nil
 }
 
 // Add KV pairs or pointers to the node. don't forget to update the offset
 func nodeAppendKV(new BNode, idx uint16, ptr uint64, key []byte, val []byte) {
-	new.setPtr(idx, ptr)
-	position := new.getKvPos(idx)
-	klen := uint16(len(key))
-	vlen := uint16(len(val))
-	//write klen
-	binary.LittleEndian.PutUint16(new[position:position+2], klen)
-
-	// write vlen
-	binary.LittleEndian.PutUint16(new[position+2:position+4], vlen)
-
-	// copy key
-	copy(new[position+4:position+4+klen], key)
-
-	// copy val
-	copy(new[position+4+klen:position+4+klen+vlen], val)
-
-	new.setOffset(idx, (4+klen+vlen)+new.getOffset(idx))
 }
 
 func (node BNode) setOffset(idx uint16, value uint16) {
-	assert(idx < node.getNumOfKeys())
-	position := HEADER + node.getNumOfKeys()*8 + idx*2
-	binary.LittleEndian.PutUint16(node[position:], value)
 }
 
 func (node BNode) nbytes() uint16 {
-	return node.getKvPos(node.getNumOfKeys())
+	return 0
 }
 
 // Assert checks if the condition is true and returns an error with detailed information if not.
