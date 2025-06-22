@@ -1,0 +1,12 @@
+[
+  {
+    "label": "debug tests",
+    "adapter": "Delve",
+    "request": "launch",
+    "mode": "test",
+    "type": "go",
+    "program": "$ZED_DIRNAME",
+    // To filter down to just the test your cursor is in:
+    "args": ["-test.run", "$ZED_SYMBOL"]
+  }
+]
