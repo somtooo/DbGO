@@ -7,8 +7,8 @@ import (
 )
 
 // node format:
-// | type | nkeys |  pointers  |   offsets  | key-values
-// |  2B  |   2B  | nkeys * 8B | nkeys * 2B | ...
+// | type | nkeys |  pointers  |   offsets  | key-value`s |unused
+// |  2B  |   2B  | nkeys * 8B | nkeys * 2B | ...         |
 
 // key-value format:
 // | klen | vlen | key | val |
@@ -25,9 +25,10 @@ func init() {
 	assert(node1max <= BTREE_PAGE_SIZE) // Suppress unused warnings
 }
 
+// the node type. 1 = internal node and 2 = leaf node
 const (
-	BNODE_NODE = 1 // internal nodes without values
-	BNODE_LEAF = 2 // leaf nodes with values
+	BNODE_INTERNAL = 1 // internal nodes without values
+	BNODE_LEAF     = 2 // leaf nodes with values
 )
 
 type BNode []byte // can be dumped to the disk
@@ -46,8 +47,6 @@ func (node BNode) getNumOfKeys() uint16 {
 
 // Set the Header using little endian encoding
 func (node BNode) setHeader(nodeType uint16, numKeys uint16) {
-	binary.LittleEndian.PutUint16(node[0:2], nodeType)
-	binary.LittleEndian.PutUint16(node[2:4], numKeys)
 }
 
 // Given a key index get its corresponding pointer
