@@ -47,46 +47,97 @@ func (node BNode) getNumOfKeys() uint16 {
 
 // Set the Header using little endian encoding
 func (node BNode) setHeader(nodeType uint16, numKeys uint16) {
+	binary.LittleEndian.PutUint16(node[0:2], nodeType)
+	binary.LittleEndian.PutUint16(node[2:4], numKeys)
 }
 
-// Given a key index get its corresponding pointer
+// Given a key index get its corresponding pointer assume idx starts from zero
 func (node BNode) getPtr(idx uint16) uint64 {
-	return 0
+	startIndex := HEADER + 8*(idx)
+	return binary.LittleEndian.Uint64(node[startIndex:])
 }
 
-// Given a key index set its corresponding pointer
+// Given a key index set its corresponding pointer assume idx starts from zero
 func (node BNode) setPtr(idx uint16, value uint64) {
+	startIndex := HEADER + 8*(idx)
+	binary.LittleEndian.PutUint64(node[startIndex:], value)
 }
 
-// Given an idx read the offsets array for the key
+// The offset array stores the starting point of each key value pair. e.g offset(0) -> 0 offset(1) -> 8 (if the total bytes taken up by the first key value pair is 8), offset(2) -> 19 (if the total bytes taken up by the first + second key-value pair is 19 so 8b + 11b)
 func (node BNode) getOffset(idx uint16) uint16 {
-	return 0
+	if idx == 0 {
+		return 0
+	}
+
+	startIndex := (HEADER + node.getNumOfKeys()*8) + (idx-1)*2
+	return binary.LittleEndian.Uint16(node[startIndex:])
 }
 
-// Now that you can read the offset for a kv pair now get the starting position of a kv pair using the getOffset()
+func (node BNode) setOffset(idx uint16, value uint16) {
+	startIndex := (HEADER + node.getNumOfKeys()*8) + idx*2
+	binary.LittleEndian.PutUint16(node[startIndex:], value)
+}
+
+// Now get the starting position of a kv pair using the getOffset()
 func (node BNode) getKvPos(idx uint16) uint16 {
-	return 0
+	// HEADER + POINTERS + OFFSETS
+	numOfKeys := node.getNumOfKeys()
+	return (HEADER + numOfKeys*8 + numOfKeys*2) + node.getOffset(idx)
 }
 
-// Now get the actual key as a byte slice
+// Now get the actual key as a byte slice because key can be of any comparable type
 func (node BNode) getKey(idx uint16) []byte {
-	return nil
+	var kvSize uint16 = 4
+	kvStartPosition := node.getKvPos(idx)
+	keyLen := binary.LittleEndian.Uint16(node[kvStartPosition:])
+	startIndex := kvStartPosition + kvSize
+	result := make([]byte, keyLen)
+	copy(result, node[startIndex:startIndex+keyLen])
+	return result
 }
 
 // Now get the actual value as a byte slice
 func (node BNode) getVal(idx uint16) []byte {
-	return nil
+	var kvSize uint16 = 4
+	kvStartPosition := node.getKvPos(idx)
+	keyLen := binary.LittleEndian.Uint16(node[kvStartPosition:])
+	valLenStartPosition := kvStartPosition + 2
+	valLen := binary.LittleEndian.Uint16(node[valLenStartPosition:])
+	startIndex := kvStartPosition + kvSize + keyLen
+	result := make([]byte, valLen)
+	copy(result, node[startIndex:startIndex+valLen])
+	return result
+
 }
+
+// // node format:
+// | type | nkeys |  pointers  |   offsets  | key-value`s |unused
+// |  2B  |   2B  | nkeys * 8B | nkeys * 2B | ...         |
+
+// // key-value format:
+// | klen | vlen | key | val |
+// |  2B  |  2B  | ... | ... |
 
 // Add KV pairs or pointers to the node. don't forget to update the offset
+// Current implementation assumes idx starts from zero
 func nodeAppendKV(new BNode, idx uint16, ptr uint64, key []byte, val []byte) {
-}
+	new.setPtr(idx, ptr)
 
-func (node BNode) setOffset(idx uint16, value uint16) {
+	keyLen := uint16(len(key))
+	valLen := uint16(len(val))
+
+	startPosition := new.getKvPos(idx)
+	binary.LittleEndian.PutUint16(new[startPosition:], keyLen)
+	binary.LittleEndian.PutUint16(new[startPosition+2:], valLen)
+
+	copy(new[startPosition+4:], key)
+	copy(new[startPosition+4+keyLen:], val)
+
+	new.setOffset(idx, new.getOffset(idx)+4+keyLen+valLen)
 }
 
 func (node BNode) nbytes() uint16 {
-	return 0
+	return node.getKvPos(node.getNumOfKeys())
 }
 
 // Assert checks if the condition is true and returns an error with detailed information if not.
