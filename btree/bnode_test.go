@@ -1,4 +1,4 @@
-package bnode
+package btree
 
 import (
 	"encoding/binary"
@@ -24,7 +24,7 @@ func TestGetNodeType(t *testing.T) {
 
 	t.Run("Pointer Operations", func(t *testing.T) {
 		node := make(BNode, BTREE_PAGE_SIZE)
-		node.setHeader(BNODE_LEAF, 3)
+		node.setHeader(BNODE_INTERNAL, 3)
 		testPtr := uint64(0x1234567890ABCDEF)
 		node.setPtr(0, testPtr)
 		if got := node.getPtr(0); got != testPtr {
@@ -44,10 +44,6 @@ func TestGetNodeType(t *testing.T) {
 	t.Run("getOffset()", func(t *testing.T) {
 		node := make(BNode, BTREE_PAGE_SIZE)
 		node.setHeader(BNODE_LEAF, 2)
-		pointer := uint64(0x1234567890ABCDEF)
-		pointer2 := uint64(0x1111111111111111)
-		node.setPtr(0, pointer)
-		node.setPtr(1, pointer2)
 		node.setOffset(0, 8)
 		node.setOffset(1, 16)
 

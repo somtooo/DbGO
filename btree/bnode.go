@@ -1,4 +1,4 @@
-package bnode
+package btree
 
 import (
 	"encoding/binary"
@@ -118,7 +118,7 @@ func (node BNode) getVal(idx uint16) []byte {
 // | klen | vlen | key | val |
 // |  2B  |  2B  | ... | ... |
 
-// Add KV pairs or pointers to the node. don't forget to update the offset
+// Add KV pairs or pointers to the node. don't forget to update the offset if a KV pair is added
 // Current implementation assumes idx starts from zero
 func nodeAppendKV(new BNode, idx uint16, ptr uint64, key []byte, val []byte) {
 	new.setPtr(idx, ptr)
