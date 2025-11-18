@@ -16,7 +16,8 @@ import (
 
 const HEADER = 4
 
-const BTREE_PAGE_SIZE = 4096
+var BTREE_PAGE_SIZE = 4096
+
 const BTREE_MAX_KEY_SIZE = 1000
 const BTREE_MAX_VAL_SIZE = 3000
 
@@ -63,7 +64,7 @@ func (node BNode) setPtr(idx uint16, value uint64) {
 	binary.LittleEndian.PutUint64(node[startIndex:], value)
 }
 
-// The offset array stores the starting point of each key value pair. e.g offset(0) -> 0 offset(1) -> 8 (if the total bytes taken up by the first key value pair is 8), offset(2) -> 19 (if the total bytes taken up by the first + second key-value pair is 19 so 8b + 11b)
+// The offset array stores the starting point of each key value pair. e.g offset(0) -> 0 offset(1) -> 8 (if the total bytes taken up by the first key value pair is 8), offset(2) -> 19 (if the total bytes taken up by the first + second key-value pair is 8b so 8b + 11b)
 func (node BNode) getOffset(idx uint16) uint16 {
 	if idx == 0 {
 		return 0
