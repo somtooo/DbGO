@@ -71,9 +71,30 @@ func treeInsert(tree *BTree, node BNode, key []byte, val []byte) BNode {
 			// insert it after the position.
 			leafInsert(new, node, idx+1, key, val)
 		}
-	// case BNODE_INTERNAL:
-	// 	// internal node, insert it to a kid node.
-	// 	nodeInsert(tree, new, node, idx, key, val)
+	case BNODE_INTERNAL:
+		// internal node recursively call into tree insert and if theres a split handle it.
+		childNodePtr := node.getPtr(idx)
+		node := treeInsert(tree, tree.get(childNodePtr), key, val)
+		nsplit, split := nodeSplit3(node)
+		tree.del(childNodePtr)
+
+		// confirm this is correct
+		totalNumOfKeys := node.getNumOfKeys() + uint16(nsplit) - 1
+		new.setHeader(BNODE_INTERNAL, totalNumOfKeys)
+		var j uint16 = 0
+
+		for i := uint16(0); i < node.getNumOfKeys(); i++ {
+			if i == idx {
+				for index, child := range split[:nsplit] {
+					childPtr := tree.new(child)
+					nodeAppendKV(new, i+uint16(index), childPtr, child.getKey(0), nil)
+				}
+				j = uint16(nsplit) - 1
+				continue
+			}
+			nodeAppendKV(new, i+j, node.getPtr(i), node.getKey(i), nil)
+		}
+
 	default:
 		panic("bad node!")
 	}
