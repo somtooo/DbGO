@@ -35,8 +35,16 @@ func (tree *BTree) Insert(key []byte, val []byte) {
 	node := treeInsert(tree, tree.get(tree.root), key, val)
 	nsplit, split := nodeSplit3(node)
 	tree.del(tree.root)
-	if nsplit > 1 {
 
+	//grow the root
+	if nsplit > 1 {
+		newRoot := make(BNode, BTREE_PAGE_SIZE)
+		newRoot.setHeader(BNODE_INTERNAL, uint16(nsplit))
+		for i := uint16(0); i < uint16(nsplit); i++ {
+			nodePtr := tree.new(split[i])
+			nodeAppendKV(newRoot, i, nodePtr, split[i].getKey(0), nil)
+		}
+		tree.root = tree.new(newRoot)
 	} else {
 		tree.root = tree.new(split[0])
 	}
@@ -70,6 +78,14 @@ func treeInsert(tree *BTree, node BNode, key []byte, val []byte) BNode {
 		panic("bad node!")
 	}
 	return new
+}
+
+func leafInsert(new, node BNode, u uint16, key []byte, val []byte) {
+	panic("unimplemented")
+}
+
+func leafUpdate(new, node BNode, idx uint16, key []byte, val []byte) {
+	panic("unimplemented")
 }
 
 // returns the first kid node whose range intersects the key. (kid[i] <= key)
