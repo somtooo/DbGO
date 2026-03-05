@@ -4,6 +4,14 @@ import (
 	"bytes"
 )
 
+// node format:
+// | type | nkeys |  pointers  |   offsets  | key-value`s |unused
+// |  2B  |   2B  | nkeys * 8B | nkeys * 2B | ...         |
+
+// key-value format:
+// | klen | vlen | key | val |
+// |  2B  |  2B  | ... | ... |
+
 // Todo: Can contain sibling pointers
 // get, new, del are used to simulate writing to in memory and wil also be used to write to actual disk
 type BTree struct {
@@ -37,17 +45,7 @@ func (tree *BTree) Insert(key []byte, val []byte) {
 	tree.del(tree.root)
 
 	//grow the root
-	if nsplit > 1 {
-		newRoot := make(BNode, BTREE_PAGE_SIZE)
-		newRoot.setHeader(BNODE_INTERNAL, uint16(nsplit))
-		for i := uint16(0); i < uint16(nsplit); i++ {
-			nodePtr := tree.new(split[i])
-			nodeAppendKV(newRoot, i, nodePtr, split[i].getKey(0), nil)
-		}
-		tree.root = tree.new(newRoot)
-	} else {
-		tree.root = tree.new(split[0])
-	}
+
 }
 
 // insert a KV into a node, the result might be split.
@@ -73,27 +71,6 @@ func treeInsert(tree *BTree, node BNode, key []byte, val []byte) BNode {
 		}
 	case BNODE_INTERNAL:
 		// internal node recursively call into tree insert and if theres a split handle it.
-		childNodePtr := node.getPtr(idx)
-		node := treeInsert(tree, tree.get(childNodePtr), key, val)
-		nsplit, split := nodeSplit3(node)
-		tree.del(childNodePtr)
-
-		// confirm this is correct
-		totalNumOfKeys := node.getNumOfKeys() + uint16(nsplit) - 1
-		new.setHeader(BNODE_INTERNAL, totalNumOfKeys)
-		var j uint16 = 0
-
-		for i := uint16(0); i < node.getNumOfKeys(); i++ {
-			if i == idx {
-				for index, child := range split[:nsplit] {
-					childPtr := tree.new(child)
-					nodeAppendKV(new, i+uint16(index), childPtr, child.getKey(0), nil)
-				}
-				j = uint16(nsplit) - 1
-				continue
-			}
-			nodeAppendKV(new, i+j, node.getPtr(i), node.getKey(i), nil)
-		}
 
 	default:
 		panic("bad node!")
@@ -127,65 +104,56 @@ func nodeLookupLE(node BNode, key []byte) (idx uint16) {
 	return i - 1
 }
 
-// Split an oversized node into two
+// Split an oversized node into two. Remember big key in the middle means we dont know on which side it will end up.
 func nodeSplit2(left BNode, right BNode, old BNode) {
-	numOfKeys := old.getNumOfKeys()
-	midPoint := numOfKeys / 2
+	nleft := old.getNumOfKeys() / 2
 
-	leftBytes := func() uint16 {
-		return (HEADER + midPoint*8 + midPoint*2) + old.getOffset(midPoint)
+	leftSize := HEADER + 8*nleft + 2*nleft + old.getOffset(nleft)
+
+	for leftSize > uint16(BTREE_PAGE_SIZE) {
+		nleft--
+		leftSize = HEADER + 8*nleft + 2*nleft + old.getOffset(nleft)
 	}
 
-	for leftBytes() > uint16(BTREE_PAGE_SIZE) {
-		midPoint--
+	rightSize := old.nbytes() - leftSize
+
+	for rightSize > uint16(BTREE_PAGE_SIZE) {
+		nleft++
+		leftSize = HEADER + 8*nleft + 2*nleft + old.getOffset(nleft)
+		rightSize = old.nbytes() - leftSize
 	}
 
-	assert(midPoint >= 1)
-	rightBytes := func() uint16 {
-		return old.nbytes() - leftBytes() + HEADER
+	left.setHeader(old.getNodeType(), nleft)
+	nodeAppendRange(old, left, 0, nleft)
+
+	nright := old.getNumOfKeys() - nleft
+	right.setHeader(old.getNodeType(), nright)
+	nodeAppendRange(old, right, nleft, old.getNumOfKeys())
+}
+
+func nodeAppendRange(old BNode, new BNode, start uint16, end uint16) {
+	for i := start; i < end; i++ {
+		nodeAppendKV(new, i, old.getPtr(i), old.getKey(i), old.getVal(i))
 	}
-
-	for rightBytes() > uint16(BTREE_PAGE_SIZE) {
-		midPoint++
-	}
-
-	assert(midPoint < old.getNumOfKeys())
-
-	left.setHeader(old.getNodeType(), midPoint)
-	rightNumOfKeys := numOfKeys - midPoint
-	right.setHeader(old.getNodeType(), rightNumOfKeys)
-
-	for i := uint16(0); i < midPoint; i++ {
-		nodeAppendKV(left, i, old.getPtr(i), old.getKey(i), old.getVal(i))
-	}
-
-	for i := uint16(0); i < rightNumOfKeys; i++ {
-		nodeAppendKV(right, i, old.getPtr(midPoint+i), old.getKey(midPoint+i), old.getVal(midPoint+i))
-	}
-	assert(right.nbytes() <= uint16(BTREE_PAGE_SIZE))
 }
 
 // Can split a node into two or three. After splitting a node into two, the left half may still be too large, because while fitting the right half, the
-// left half size grows. This can happen if there is a big key in the middle, requiring another split. So thats why the node can be split into three
+// left half size grows. This can happen if there is a big key in the middle, requiring another split. So that's why the node can be split into three
 func nodeSplit3(old BNode) (int, [3]BNode) {
-	if old.nbytes() < uint16(BTREE_PAGE_SIZE) {
-		old = old[:BTREE_PAGE_SIZE]
-		return 1, [3]BNode{old}
+	if old.nbytes() > uint16(BTREE_PAGE_SIZE) {
+		left := make(BNode, 2*BTREE_PAGE_SIZE)
+		right := make(BNode, BTREE_PAGE_SIZE)
+		nodeSplit2(left, right, old)
+		if left.nbytes() > uint16(BTREE_PAGE_SIZE) {
+			newLeft := make(BNode, BTREE_PAGE_SIZE)
+			middle := make(BNode, BTREE_PAGE_SIZE)
+			nodeSplit2(newLeft, middle, left)
+			return 3, [3]BNode{newLeft, middle, right}
+		}
+
+		return 2, [3]BNode{left[:BTREE_PAGE_SIZE], right}
 	}
 
-	left := make(BNode, 2*BTREE_PAGE_SIZE)
-	right := make(BNode, BTREE_PAGE_SIZE)
+	return 1, [3]BNode{old[:BTREE_PAGE_SIZE]}
 
-	nodeSplit2(left, right, old)
-
-	if left.nbytes() < uint16(BTREE_PAGE_SIZE) {
-		left = left[:BTREE_PAGE_SIZE]
-		return 2, [3]BNode{left, right}
-	}
-
-	left1 := make(BNode, BTREE_PAGE_SIZE)
-	right1 := make(BNode, BTREE_PAGE_SIZE)
-
-	nodeSplit2(left1, right1, left)
-	return 3, [3]BNode{left1, right1, right}
 }
