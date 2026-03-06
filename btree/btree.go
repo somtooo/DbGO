@@ -43,9 +43,17 @@ func (tree *BTree) Insert(key []byte, val []byte) {
 	node := treeInsert(tree, tree.get(tree.root), key, val)
 	nsplit, split := nodeSplit3(node)
 	tree.del(tree.root)
-
 	//grow the root
-
+	if nsplit > 1 {
+		newRoot := make(BNode, BTREE_PAGE_SIZE)
+		newRoot.setHeader(BNODE_INTERNAL, uint16(nsplit))
+		for i := uint16(0); i < uint16(nsplit); i++ {
+			nodeAppendKV(newRoot, i, tree.new(split[i]), split[i].getKey(0), nil)
+		}
+		tree.root = tree.new(newRoot)
+	} else {
+		tree.root = tree.new(split[0])
+	}
 }
 
 // insert a KV into a node, the result might be split.
@@ -71,6 +79,18 @@ func treeInsert(tree *BTree, node BNode, key []byte, val []byte) BNode {
 		}
 	case BNODE_INTERNAL:
 		// internal node recursively call into tree insert and if theres a split handle it.
+		newNode := treeInsert(tree, tree.get(node.getPtr(idx)), key, val)
+		nsplit, split := nodeSplit3(newNode)
+		new.setHeader(BNODE_INTERNAL, node.getNumOfKeys()+uint16(nsplit)-1)
+		for i := range idx {
+			nodeAppendKV(new, i, node.getPtr(i), node.getKey(i), node.getVal(i))
+		}
+		for i, knode := range split[:nsplit] {
+			nodeAppendKV(new, idx+uint16(i), tree.new(knode), knode.getKey(0), nil)
+		}
+		for i := uint16(0); i < node.getNumOfKeys()-(idx+1); i++ {
+			nodeAppendKV(new, idx+uint16(nsplit)+i, node.getPtr(idx+1+i), node.getKey(idx+1+i), node.getVal(idx+1+i))
+		}
 
 	default:
 		panic("bad node!")
@@ -96,7 +116,7 @@ func nodeLookupLE(node BNode, key []byte) (idx uint16) {
 			return i
 		}
 
-		if cmp > 0 {
+		if cmp < 0 {
 			return i - 1
 		}
 	}
