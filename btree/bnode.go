@@ -75,7 +75,8 @@ func (node BNode) getOffset(idx uint16) uint16 {
 }
 
 func (node BNode) setOffset(idx uint16, value uint16) {
-	startIndex := (HEADER + node.getNumOfKeys()*8) + idx*2
+	assert(1 <= idx && idx <= node.getNumOfKeys())
+	startIndex := (HEADER + node.getNumOfKeys()*8) + 2*(idx-1)
 	binary.LittleEndian.PutUint16(node[startIndex:], value)
 }
 

@@ -79,8 +79,10 @@ func treeInsert(tree *BTree, node BNode, key []byte, val []byte) BNode {
 		}
 	case BNODE_INTERNAL:
 		// internal node recursively call into tree insert and if theres a split handle it.
-		newNode := treeInsert(tree, tree.get(node.getPtr(idx)), key, val)
+		kidPtr := node.getPtr(idx)
+		newNode := treeInsert(tree, tree.get(kidPtr), key, val)
 		nsplit, split := nodeSplit3(newNode)
+		tree.del(kidPtr)
 		new.setHeader(BNODE_INTERNAL, node.getNumOfKeys()+uint16(nsplit)-1)
 		for i := range idx {
 			nodeAppendKV(new, i, node.getPtr(i), node.getKey(i), node.getVal(i))
@@ -151,10 +153,28 @@ func nodeSplit2(left BNode, right BNode, old BNode) {
 	nodeAppendRange(old, right, nleft, old.getNumOfKeys())
 }
 
-func nodeAppendRange(old BNode, new BNode, start uint16, end uint16) {
-	for i := start; i < end; i++ {
-		nodeAppendKV(new, i, old.getPtr(i), old.getKey(i), old.getVal(i))
+func nodeAppendRange(old BNode, new BNode, oldStartIdx uint16, newStartIdx uint16, numOfKVPairs uint16) {
+	assert(oldStartIdx+numOfKVPairs <= old.getNumOfKeys())
+	assert(newStartIdx+numOfKVPairs <= new.getNumOfKeys())
+	if numOfKVPairs == 0 {
+		return
 	}
+
+	for i := uint16(0); i < numOfKVPairs; i++ {
+		new.setPtr(newStartIdx+i, old.getPtr(i+oldStartIdx))
+	}
+
+	for i := uint16(1); i <= numOfKVPairs; i++ {
+		offset := (old.getOffset(i+oldStartIdx) - old.getOffset(oldStartIdx-1+i)) + new.getOffset(i-1+newStartIdx)
+
+		new.setOffset(i+newStartIdx, offset)
+	}
+
+	oldKvPosStart := old.getKvPos(oldStartIdx)
+	oldKvPosEnd := old.getKvPos(oldStartIdx + numOfKVPairs)
+	newKvPos := new.getKvPos(newStartIdx)
+
+	copy(new[newKvPos:], old[oldKvPosStart:oldKvPosEnd])
 }
 
 // Can split a node into two or three. After splitting a node into two, the left half may still be too large, because while fitting the right half, the
