@@ -84,6 +84,8 @@ func treeInsert(tree *BTree, node BNode, key []byte, val []byte) BNode {
 		nsplit, split := nodeSplit3(newNode)
 		tree.del(kidPtr)
 		new.setHeader(BNODE_INTERNAL, node.getNumOfKeys()+uint16(nsplit)-1)
+
+		// This can be made faster
 		for i := range idx {
 			nodeAppendKV(new, i, node.getPtr(i), node.getKey(i), node.getVal(i))
 		}
@@ -100,12 +102,18 @@ func treeInsert(tree *BTree, node BNode, key []byte, val []byte) BNode {
 	return new
 }
 
-func leafInsert(new, node BNode, u uint16, key []byte, val []byte) {
-	panic("unimplemented")
+func leafInsert(new, node BNode, insertPos uint16, key []byte, val []byte) {
+	new.setHeader(BNODE_LEAF, node.getNumOfKeys()+1)
+	nodeAppendRange(node, new, 0, 0, insertPos)
+	nodeAppendKV(new, insertPos, 0, key, val)
+	nodeAppendRange(node, new, insertPos, insertPos+1, node.getNumOfKeys()-insertPos)
 }
 
 func leafUpdate(new, node BNode, idx uint16, key []byte, val []byte) {
-	panic("unimplemented")
+	new.setHeader(BNODE_LEAF, node.getNumOfKeys())
+	nodeAppendRange(node, new, 0, 0, idx)
+	nodeAppendKV(new, idx, 0, key, val)
+	nodeAppendRange(node, new, idx+1, idx+1, node.getNumOfKeys()-(idx+1))
 }
 
 // returns the first kid node whose range intersects the key. (kid[i] <= key)
@@ -146,11 +154,11 @@ func nodeSplit2(left BNode, right BNode, old BNode) {
 	}
 
 	left.setHeader(old.getNodeType(), nleft)
-	nodeAppendRange(old, left, 0, nleft)
+	nodeAppendRange(old, left, 0, 0, nleft)
 
 	nright := old.getNumOfKeys() - nleft
 	right.setHeader(old.getNodeType(), nright)
-	nodeAppendRange(old, right, nleft, old.getNumOfKeys())
+	nodeAppendRange(old, right, nleft, 0, nright)
 }
 
 func nodeAppendRange(old BNode, new BNode, oldStartIdx uint16, newStartIdx uint16, numOfKVPairs uint16) {

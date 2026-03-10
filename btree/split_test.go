@@ -122,3 +122,7 @@ func TestNodeSplit3_LargeMiddleKey(t *testing.T) {
 		}
 	}
 }
+
+func TestSubtraction(t *testing.T) {
+	println(4 - 2 + 1)
+}
