@@ -21,6 +21,105 @@ type BTree struct {
 	del  func(uint64)        // deallocate a page number
 }
 
+func (tree *BTree) Delete(key []byte) bool {
+	assert(len(key) != 0)
+	assert(len(key) <= BTREE_MAX_KEY_SIZE)
+
+	updated := treeDelete(tree, tree.get(tree.root), key)
+	if len(updated) == 0 {
+		return false
+	}
+	tree.del(tree.root)
+	// something has to happen to the root on delete implement it
+	return false
+}
+
+// note: this code doesnt implement stealing from siblings but just merge if the size of the node is less than 1/4 of max btree size
+func treeDelete(tree *BTree, node BNode, key []byte) BNode {
+	idx := nodeLookupLE(node, key)
+	new := make(BNode, BTREE_PAGE_SIZE)
+	// act depending on the node type
+	switch node.getNodeType() {
+	case BNODE_LEAF:
+		if !bytes.Equal(key, node.getKey(idx)) {
+			return BNode{} // not found
+		}
+		// delete the key in the leaf
+		leafDelete(new, node, idx)
+	case BNODE_INTERNAL:
+		// handle merges recursivly
+		ptr := node.getPtr(idx)
+		newNode := treeDelete(tree, tree.get(ptr), key)
+		position, sibling := shouldMerge(tree, node, idx, newNode)
+
+		// we have to merge to the left or to the right
+		if position != 0 {
+			mergedNode := make(BNode, BTREE_PAGE_SIZE)
+			mergedNode.setHeader(newNode.getNodeType(), newNode.getNumOfKeys()+sibling.getNumOfKeys())
+			new.setHeader(node.getNodeType(), node.getNumOfKeys()-1)
+			tree.del(ptr)
+			if position > 0 {
+				// merge node
+				nodeAppendRange(newNode, mergedNode, 0, 0, newNode.getNumOfKeys())
+				nodeAppendRange(sibling, mergedNode, 0, newNode.getNumOfKeys(), sibling.getNumOfKeys())
+
+				// update kid links
+				nodeAppendRange(node, new, 0, 0, idx)
+				nodeAppendKV(new, idx, tree.new(mergedNode), node.getKey(idx), nil)
+				nodeAppendRange(node, new, idx+2, idx+1, node.getNumOfKeys()-(idx+2))
+			}
+			if position < 0 {
+				// merge node
+				nodeAppendRange(sibling, mergedNode, 0, 0, sibling.getNumOfKeys())
+				nodeAppendRange(newNode, mergedNode, 0, sibling.getNumOfKeys(), newNode.getNumOfKeys())
+
+				//update kid links
+				nodeAppendRange(node, new, 0, 0, idx-1)
+				nodeAppendKV(new, idx-1, tree.new(mergedNode), node.getKey(idx-1), nil)
+				nodeAppendRange(node, new, idx+1, idx, node.getNumOfKeys()-(idx+1))
+			}
+		}
+
+		// no merge happened but kid links still need to be updated also think what happenes on a empty node how does this propagate to the root?
+		if position == 0 {
+
+		}
+
+	default:
+		panic("bad node!")
+	}
+	return new
+}
+
+// when checking merge conditions because we lack sibling pointers we cant really merge with leaf nodes that exist in another subtree(e.g a node that can only be reached by going back to the root)
+func shouldMerge(tree *BTree, node BNode, idx uint16, updated BNode) (int, BNode) {
+	if updated.nbytes()/4 > uint16(BTREE_PAGE_SIZE) {
+		return 0, BNode{}
+	}
+
+	if idx > 0 {
+		var sibling BNode = tree.get(node.getPtr(idx - 1))
+		totalBytes := sibling.nbytes() + updated.nbytes() - HEADER
+		if totalBytes <= uint16(BTREE_PAGE_SIZE) {
+			return -1, sibling // left
+		}
+	}
+
+	if idx+1 < node.getNumOfKeys() {
+		var sibling BNode = tree.get(node.getPtr(idx + 1))
+		totalBytes := sibling.nbytes() + updated.nbytes() - HEADER
+		if totalBytes <= uint16(BTREE_PAGE_SIZE) {
+			return +1, sibling //right
+		}
+	}
+	return 0, BNode{}
+
+}
+
+func leafDelete(new BNode, old BNode, idx uint16) {
+
+}
+
 // Todo: Implement the btree insert/ update with tests here are some starter functions finish up
 func (tree *BTree) Insert(key []byte, val []byte) {
 
